@@ -1,0 +1,24 @@
+{
+  "name": "pruba_excel_plantilla",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cloudmersive-validate-api-client": "^1.4.8",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "mssql": "^11.0.1",
+    "office-to-pdf": "^4.0.0",
+    "puppeteer": "^24.16.2"
+  },
+  "type": "module"
+}

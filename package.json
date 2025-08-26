@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -16,10 +19,11 @@
     "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
-    "mssql": "^11.0.1",
     "mysql2": "^3.14.3",
     "office-to-pdf": "^4.0.0",
     "puppeteer": "^24.16.2"
   },
-  "type": "module"
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
 }

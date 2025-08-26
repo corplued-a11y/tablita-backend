@@ -2,33 +2,45 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import sql from 'mssql';
 import cors from 'cors';
 import puppeteer from 'puppeteer';
+import mysql from 'mysql2/promise';  // 👈 importante: usar promesas
+import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 
-//nuevo codigo con env
+// Configuración MySQL con .env
 const config = {
+  host: process.env.DB_HOST,   // servidor (localhost, IP, etc)
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
-  server: process.env.DB_HOST, // 👈 cambia DB_SERVER por DB_HOST, más estándar
   database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT) || 1433,
-  options: {
-    encrypt: true,             // necesario en GCP/Azure
-    trustServerCertificate: false
-  }
+  port: parseInt(process.env.DB_PORT) || 3306
 };
-//nuevo codigo con env
 
+// Crear pool de conexiones (más eficiente que abrir/cerrar en cada query)
+const pool = mysql.createPool(config);
+
+// Probar conexión
+async function testConnection() {
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query("SELECT NOW() AS FechaServidor");
+    console.log("✅ Conectado a MySQL:", rows);
+    connection.release();
+  } catch (err) {
+    console.error("❌ Error de conexión:", err.message);
+  }
+}
+testConnection();
+
+// Middleware CORS
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Permitir peticiones sin origin (ej: Postman)
+    if (!origin) return callback(null, true);
 
-    // Expresión regular para *.ngrok-free.app o localhost
     const allowed = [
       /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/,
       /^http:\/\/localhost(:[0-9]+)?$/
@@ -44,72 +56,54 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// Para obtener __dirname en ESModules
-/* const config = {
-  user: 'Lued',
-  password: '70880118',
-  server: 'LAPTOP-T1SUIMK1',
-  database: 'bd_servicios',
-  options: {
-    encrypt: false,
-    trustServerCertificate: true
-  }
-}; */
-//
+// ====================== ENDPOINTS ======================  
 
-// Endpoint para obtener todos los contratos
+// Obtener todos los contratos
 app.get('/contratos', async (req, res) => {
   try {
-    let pool = await sql.connect(config);
-    let result = await pool.request().query('SELECT * FROM Tablita');
-    res.json(result.recordset);
+    const [rows] = await pool.query('SELECT * FROM bd_tercero');
+    res.json(rows);
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
-// Endpoint para obtener contratos especificos por item
+
+// Obtener contratos por item
 app.get('/contratos/item/:item', async (req, res) => {
   const { item } = req.params;
   try {
-    let pool = await sql.connect(config);
-    let result = await pool.request()
-      .input('Item', sql.NVarChar, item)
-      .query('SELECT * FROM Tablita WHERE [ITEM] = @Item');
-    res.json(result.recordset);
+    const [rows] = await pool.query('SELECT * FROM bd_tercero WHERE ITEM = ?', [item]);
+    res.json(rows);
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
 
-// Endpoint para obtener un contrato específico por item
+// Generar PDF por item
 app.get('/contratos/pdf/:item', async (req, res) => {
   const { item } = req.params;
 
   try {
-    // 1) Obtener datos desde SQL
-    let pool = await sql.connect(config);
-    let result = await pool.request()
-      .input('Item', sql.NVarChar, item)
-      .query('SELECT * FROM Tablita WHERE [ITEM] = @Item');
+    // 1) Consultar contrato
+    const [rows] = await pool.query('SELECT * FROM bd_tercero WHERE ITEM = ?', [item]);
 
-    if (result.recordset.length === 0) {
+    if (rows.length === 0) {
       return res.status(404).send("No se encontró el contrato con ese item");
     }
 
-    const contrato = result.recordset[0];
+    const contrato = rows[0];
 
     // 2) Cargar plantilla HTML
-    //const templatePath = path.join(__dirname, 'templates','plantilla.html');
     const templatePath = path.join(__dirname, 'templates', 'OGRH_Plant.html');
     let html = fs.readFileSync(templatePath, 'utf8');
 
-    // 3) Reemplazar placeholders {{CAMPO}}
+    // 3) Reemplazar placeholders
     Object.keys(contrato).forEach(key => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       html = html.replace(regex, contrato[key] ?? '');
     });
 
-    // 4) Usar Puppeteer para generar PDF
+    // 4) Generar PDF con Puppeteer
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox']
@@ -125,7 +119,7 @@ app.get('/contratos/pdf/:item', async (req, res) => {
     });
     await browser.close();
 
-    // 5) Enviar el PDF como descarga
+    // 5) Enviar PDF
     res.download(pdfPath);
 
   } catch (err) {
@@ -134,6 +128,6 @@ app.get('/contratos/pdf/:item', async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT||3000, () => {
+app.listen(process.env.PORT || 3000, () => {
   console.log('Servidor iniciado en http://localhost:3000');
 });

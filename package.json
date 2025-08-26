@@ -17,6 +17,7 @@
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "mssql": "^11.0.1",
+    "mysql2": "^3.14.3",
     "office-to-pdf": "^4.0.0",
     "puppeteer": "^24.16.2"
   },

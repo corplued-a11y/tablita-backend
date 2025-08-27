@@ -128,6 +128,55 @@ app.get('/contratos/pdf/:item', async (req, res) => {
   }
 });
 
+// Generar PDF por item (descarga directa sin guardar en servidor)
+app.get('/contratos/pdf-directo/:item', async (req, res) => {
+  const { item } = req.params;
+
+  try {
+    // 1) Consultar contrato
+    const [rows] = await pool.query('SELECT * FROM bd_tercero WHERE ITEM = ?', [item]);
+
+    if (rows.length === 0) {
+      return res.status(404).send("No se encontró el contrato con ese item");
+    }
+
+    const contrato = rows[0];
+
+    // 2) Cargar plantilla HTML
+    const templatePath = path.join(__dirname, 'templates', 'OGRH_Plant.html');
+    let html = fs.readFileSync(templatePath, 'utf8');
+
+    // 3) Reemplazar placeholders
+    Object.keys(contrato).forEach(key => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      html = html.replace(regex, contrato[key] ?? '');
+    });
+
+    // 4) Generar PDF en memoria con Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true
+    });
+    await browser.close();
+
+    // 5) Enviar PDF al navegador como descarga
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=contrato_${item}.pdf`);
+    res.send(pdfBuffer);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error al generar el PDF: " + err.message);
+  }
+});
+
 app.listen(process.env.PORT || 3000, () => {
   console.log('Servidor iniciado en http://localhost:3000');
 });
